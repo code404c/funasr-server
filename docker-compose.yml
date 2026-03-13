@@ -3,18 +3,28 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
+    image: funasr-server:latest
+    container_name: funasr-server
+    restart: unless-stopped
     ports:
       - "8101:8000"
+    volumes:
+      - ${FUNASR_MODEL_CACHE_DIR:-${HOME}/.cache/modelscope}:/modelscope-cache
+    environment:
+      - FUNASR_MODEL_CACHE_DIR=/modelscope-cache
+    env_file:
+      - path: .env
+        required: false
     deploy:
       resources:
         reservations:
           devices:
-            - capabilities: [gpu]
-    volumes:
-      - ${HOME}/.cache/modelscope:/modelscope-cache
-    environment:
-      - FUNASR_MODEL_CACHE_DIR=/modelscope-cache
-      - FUNASR_DEVICE=cuda:0
-      - FUNASR_LOG_JSON=true
-    env_file:
-      - .env
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://0.0.0.0:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s

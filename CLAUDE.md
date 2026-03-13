@@ -57,6 +57,8 @@ POST /v1/audio/transcriptions
 | `FUNASR_MODEL_CACHE_DIR` | `/modelscope-cache` | 模型缓存目录（本地开发用 `~/models`） |
 | `FUNASR_DEVICE` | `cuda:0` | PyTorch 推理设备 |
 | `FUNASR_MODEL_TTL_SECONDS` | `900` | 模型池 TTL（秒），-1 表示永不过期 |
+| `FUNASR_BATCH_SIZE_S` | `60` | VAD 切分后每批最大秒数，按 GPU 显存调整 |
+| `FUNASR_MERGE_LENGTH_S` | `15` | VAD 合并后每段最大秒数 |
 | `FUNASR_API_KEY` | (空) | 可选 Bearer token 认证 |
 | `FUNASR_LOG_LEVEL` | `INFO` | 日志级别 |
 | `FUNASR_LOG_JSON` | `true` | 是否输出 JSON 格式日志 |

@@ -24,6 +24,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from loguru import logger
 
+from funasr_server import __version__
 from funasr_server.config import Settings, get_settings
 from funasr_server.engine import FunASREngine
 from funasr_server.model_pool import TTLModelPool
@@ -90,7 +91,7 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
     engine = FunASREngine(settings=settings, model_pool=model_pool)
 
     # 创建 FastAPI 实例，lifespan 参数指定生命周期管理器
-    app = FastAPI(title="funasr-server", version="0.1.0", lifespan=_lifespan)
+    app = FastAPI(title="funasr-server", version=__version__, lifespan=_lifespan)
     # 将配置和引擎挂载到 app.state，路由处理函数中可通过 request.app.state 访问
     app.state.settings = settings
     app.state.engine = engine

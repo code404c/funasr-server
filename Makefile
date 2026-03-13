@@ -4,7 +4,7 @@ PYTEST := $(UV) run pytest
 RUFF := $(UV) run ruff
 DOCKER_COMPOSE := docker compose
 
-.PHONY: help install dev test format lint check download-models docker-up docker-down
+.PHONY: help install dev test format lint check download-models docker-build docker-up docker-down docker-logs
 
 help:
 	@echo "开发:"
@@ -21,8 +21,10 @@ help:
 	@echo "  make download-models  - 预下载 FunASR 模型"
 	@echo ""
 	@echo "Docker:"
+	@echo "  make docker-build     - docker build"
 	@echo "  make docker-up        - docker compose up --build"
 	@echo "  make docker-down      - docker compose down"
+	@echo "  make docker-logs      - docker compose logs -f"
 
 install:
 	$(UV) sync --extra dev
@@ -47,8 +49,14 @@ check:
 download-models:
 	$(PYTHON) scripts/download_models.py
 
+docker-build:
+	docker build -f docker/Dockerfile -t funasr-server:latest .
+
 docker-up:
 	$(DOCKER_COMPOSE) up --build
 
 docker-down:
 	$(DOCKER_COMPOSE) down
+
+docker-logs:
+	$(DOCKER_COMPOSE) logs -f

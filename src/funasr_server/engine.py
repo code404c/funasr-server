@@ -111,9 +111,9 @@ class FunASREngine:
             "cache": {},  # 推理缓存，每次请求独立（空字典表示不复用）
             "language": language or profile.default_language,  # 语言设置，优先使用用户指定值
             "use_itn": True,  # 启用逆文本正则化（数字、日期等转为书面形式）
-            "batch_size_s": 60,  # VAD 切分后每批最大秒数，控制 GPU 显存占用
+            "batch_size_s": self.settings.batch_size_s,  # VAD 切分后每批最大秒数，控制 GPU 显存占用
             "merge_vad": True,  # 合并 VAD 切分的短片段，减少碎片化
-            "merge_length_s": 15,  # 合并后每段最大秒数
+            "merge_length_s": self.settings.merge_length_s,  # 合并后每段最大秒数
         }
         # 仅当用户提供了热词且当前 profile 支持热词功能时才传入
         if hotwords and profile.supports_hotwords:
