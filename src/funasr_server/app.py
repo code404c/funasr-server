@@ -48,6 +48,8 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
             auth = request.headers.get("Authorization", "")
             token = auth.removeprefix("Bearer ").strip()
             if not hmac.compare_digest(token, expected):
+                client = request.client.host if request.client else "unknown"
+                logger.warning("API key auth failed: path={} client={}", request.url.path, client)
                 return JSONResponse(status_code=401, content={"detail": "Invalid API key"})
             return await call_next(request)
 

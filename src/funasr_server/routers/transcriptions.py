@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tempfile
+import time
 from pathlib import Path
 from typing import Annotated
 
@@ -39,13 +40,17 @@ async def create_transcription(
 
     suffix = Path(file.filename).suffix if file.filename else ".wav"
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-        content = await file.read()
-        tmp.write(content)
         tmp_path = Path(tmp.name)
 
     try:
+        content = await file.read()
+        tmp_path.write_bytes(content)
+
         logger.info("Transcription request: model={} language={} format={}", model, language, response_format)
+        t0 = time.perf_counter()
         result = engine.transcribe(tmp_path, model=model, language=language, hotwords=hotwords)
+        duration_ms = (time.perf_counter() - t0) * 1000
+        logger.info("Transcription completed in {:.0f}ms", duration_ms)
     except FunASRUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:

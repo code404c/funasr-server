@@ -44,10 +44,12 @@ class TestTTLModelPool:
 
         # 模拟时间推进使缓存过期
         with patch("funasr_server.model_pool.time") as mock_time:
-            # 第一次 monotonic 调用在 _is_expired 检查中
-            # 第二次在存储新 entry 时
+            # per-key locking 路径下 monotonic 调用次数:
+            #   1) fast path _is_expired  2) double-check _is_expired
+            #   3) t0 计时  4) elapsed 计时  5) 存储 last_used
             initial = time.monotonic()
-            mock_time.monotonic.side_effect = [initial + 100, initial + 100]
+            far_future = initial + 100
+            mock_time.monotonic.side_effect = [far_future] * 5
 
             result2 = pool.get_or_create("key1", loader)
 

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import time
 from collections import Counter
 from pathlib import Path
 from typing import Any
+
+from loguru import logger
 
 from funasr_server.config import Settings
 from funasr_server.model_pool import TTLModelPool
@@ -44,6 +47,9 @@ class FunASREngine:
         if hotwords and profile.supports_hotwords:
             generate_kwargs["hotword"] = hotwords
 
+        logger.debug("Starting inference for profile={} file={}", profile.name.value, audio_path.name)
+        t0 = time.monotonic()
+
         results = asr_model.generate(**generate_kwargs)
         if not results:
             raise RuntimeError("FunASR returned no transcription results.")
@@ -55,6 +61,17 @@ class FunASREngine:
         segments = self._build_segments(sentence_info, full_text)
         speakers = self._build_speakers(segments)
         duration = self._compute_duration(segments)
+
+        elapsed = time.monotonic() - t0
+        logger.info(
+            "Transcription completed: profile={} file={} segments={} speakers={} duration={:.3f}s elapsed={:.3f}s",
+            profile.name.value,
+            audio_path.name,
+            len(segments),
+            len(speakers),
+            duration,
+            elapsed,
+        )
 
         return TranscriptionResult(
             text=full_text,
@@ -73,6 +90,9 @@ class FunASREngine:
                     "FunASR is not installed. Install the project dependencies to enable transcription."
                 ) from exc
 
+            logger.info("Loading model: cache_key={} device={}", cache_key, self.settings.device)
+            t0 = time.monotonic()
+
             profile = get_profile_spec(cache_key)
             model_kwargs: dict[str, Any] = {
                 "model": self._resolve_model_path(profile.asr_model_id),
@@ -84,7 +104,11 @@ class FunASREngine:
                 model_kwargs["punc_model"] = self._resolve_model_path(profile.punc_model_id)
             if profile.speaker_model_id:
                 model_kwargs["spk_model"] = self._resolve_model_path(profile.speaker_model_id)
-            return AutoModel(**model_kwargs)
+            result = AutoModel(**model_kwargs)
+
+            elapsed = time.monotonic() - t0
+            logger.info("Model loaded: cache_key={} elapsed={:.3f}s", cache_key, elapsed)
+            return result
 
         return self.model_pool.get_or_create(cache_key, _loader)
 
@@ -94,7 +118,9 @@ class FunASREngine:
         for prefix in ("", "models/", "hub/"):
             candidate = cache / prefix / model_id
             if candidate.is_dir():
+                logger.debug("Resolved model path: {} -> {}", model_id, candidate)
                 return str(candidate)
+        logger.debug("No local cache for model {}, will download from ModelScope", model_id)
         return model_id
 
     @staticmethod
