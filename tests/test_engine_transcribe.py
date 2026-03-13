@@ -144,6 +144,24 @@ class TestTranscribe:
             with pytest.raises(RuntimeError, match="no transcription results"):
                 engine.transcribe(audio_path, model="cn_meeting")
 
+    def test_transcribe_passes_gpu_params(self, tmp_path: Path, pool: TTLModelPool[Any]) -> None:
+        """batch_size_s 和 merge_length_s 从 Settings 正确传递到 generate_kwargs。"""
+        custom_settings = Settings(model_cache_dir=tmp_path, device="cpu", batch_size_s=200, merge_length_s=30)
+        custom_engine = FunASREngine(settings=custom_settings, model_pool=pool)
+
+        audio_path = tmp_path / "test.wav"
+        audio_path.write_bytes(b"fake-audio")
+
+        mock_model = MagicMock()
+        mock_model.generate.return_value = [{"text": "ok", "sentence_info": []}]
+
+        with patch.object(custom_engine.model_pool, "get_or_create", return_value=mock_model):
+            custom_engine.transcribe(audio_path, model="cn_meeting")
+
+        call_kwargs = mock_model.generate.call_args[1]
+        assert call_kwargs["batch_size_s"] == 200
+        assert call_kwargs["merge_length_s"] == 30
+
     def test_transcribe_default_language(self, engine: FunASREngine, tmp_path: Path) -> None:
         """不传 language 时使用 profile 默认语言。"""
         audio_path = tmp_path / "test.wav"

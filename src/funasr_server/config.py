@@ -61,8 +61,8 @@ class Settings(BaseSettings):
     model_cache_dir: Path = Path("/modelscope-cache")
     model_ttl_seconds: int = 900
     device: str = "cuda:0"
-    batch_size_s: int = 60
-    merge_length_s: int = 15
+    batch_size_s: int = 60  # VAD 切分后每批最大音频秒数，显存越大可设越高
+    merge_length_s: int = 15  # VAD 合并后每段最大秒数
     api_key: SecretStr | None = None
 
 
