@@ -1,0 +1,20 @@
+services:
+  funasr-server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8101:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    volumes:
+      - ${HOME}/.cache/modelscope:/modelscope-cache
+    environment:
+      - FUNASR_MODEL_CACHE_DIR=/modelscope-cache
+      - FUNASR_DEVICE=cuda:0
+      - FUNASR_LOG_JSON=true
+    env_file:
+      - .env

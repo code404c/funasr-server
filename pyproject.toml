@@ -1,0 +1,56 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "funasr-server"
+version = "0.1.0"
+description = "OpenAI-compatible STT server powered by FunASR."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115.11",
+  "funasr>=1.1.14",
+  "loguru>=0.7.3",
+  "modelscope>=1.23.2",
+  "pydantic>=2.10.6",
+  "pydantic-settings>=2.7.1",
+  "python-multipart>=0.0.20",
+  "torch>=2.6.0",
+  "torchaudio>=2.6.0",
+  "uvicorn[standard]>=0.34.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "anyio>=4.8.0",
+  "httpx>=0.28.1",
+  "pytest>=8.3.4",
+  "pytest-cov>=6.0.0",
+  "ruff>=0.11.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/funasr_server"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "--cov=src --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["src"]
+
+[tool.coverage.report]
+fail_under = 50
+show_missing = true
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.format]
+quote-style = "double"
