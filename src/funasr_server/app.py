@@ -1,10 +1,9 @@
 from __future__ import annotations
 
+import hmac
 import sys
 from contextlib import asynccontextmanager
 from typing import Any
-
-import hmac
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse

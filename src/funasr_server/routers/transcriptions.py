@@ -50,9 +50,9 @@ async def create_transcription(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception:
+    except Exception as exc:
         logger.exception("Transcription failed")
-        raise HTTPException(status_code=500, detail="Internal transcription error")
+        raise HTTPException(status_code=500, detail="Internal transcription error") from exc
     finally:
         tmp_path.unlink(missing_ok=True)
 

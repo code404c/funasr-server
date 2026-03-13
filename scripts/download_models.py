@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """下载 FunASR 模型到本地缓存。"""
+
 from __future__ import annotations
 
 import argparse
@@ -24,9 +25,7 @@ def _resolve_snapshot_download():
         snapshot_download = getattr(module, attribute, None)
         if callable(snapshot_download):
             return snapshot_download
-    raise RuntimeError(
-        "ModelScope is not installed. Install the project dependencies before downloading models."
-    )
+    raise RuntimeError("ModelScope is not installed. Install the project dependencies before downloading models.")
 
 
 def _iter_model_ids(profiles: Iterable[str]) -> list[str]:
