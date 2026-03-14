@@ -50,7 +50,17 @@ target-version = "py312"
 line-length = 120
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+select = ["E", "F", "I", "UP", "B", "S", "SIM", "RUF", "PTH", "PERF"]
+ignore = [
+    "S101",    # assert in tests
+    "S104",    # binding to 0.0.0.0 (Docker deployment by design)
+    "S108",    # /tmp usage (test fixtures)
+    "S603",    # subprocess calls in scripts
+    "S607",    # partial executable path in scripts
+    "RUF002",  # ambiguous unicode in docstrings (Chinese comments by design)
+    "RUF003",  # ambiguous unicode in comments (Chinese comments by design)
+    "B008",    # Depends() in function defaults (standard FastAPI pattern)
+]
 
 [tool.ruff.format]
 quote-style = "double"

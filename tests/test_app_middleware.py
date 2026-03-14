@@ -1,4 +1,4 @@
-"""app.py 中间件与 lifespan 测试 — 覆盖 API key 认证和启动/关闭事件。"""
+"""app.py 认证与 lifespan 测试 — 覆盖 API key 鉴权依赖和启动/关闭事件。"""
 
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ def client_no_key(fake_result: TranscriptionResult):
 
 
 class TestApiKeyMiddleware:
-    """API key 认证中间件测试。"""
+    """API key 鉴权依赖测试。"""
 
     def test_no_key_returns_401(self, client_with_key: TestClient) -> None:
         """未携带 API key 的请求应返回 401。"""
@@ -95,8 +95,6 @@ class TestLifespan:
         """验证 lifespan 上下文管理器正常执行。"""
         settings = Settings(model_cache_dir=Path("/tmp/test-cache"), device="cpu")
         app = create_app(settings=settings)
-        with patch.object(app.state.engine, "transcribe", return_value=fake_result):
-            # TestClient 进入/退出上下文时触发 lifespan startup/shutdown
-            with TestClient(app) as tc:
-                resp = tc.get("/health")
-                assert resp.status_code == 200
+        with patch.object(app.state.engine, "transcribe", return_value=fake_result), TestClient(app) as tc:
+            resp = tc.get("/health")
+            assert resp.status_code == 200

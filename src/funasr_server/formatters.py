@@ -52,7 +52,7 @@ def _format_timestamp(seconds: float, *, vtt: bool = False) -> str:
         格式化后的时间戳字符串，如 "00:01:30,500" 或 "00:01:30.500"
     """
     # 先将秒转为总毫秒数（四舍五入），避免浮点精度问题
-    total_ms = int(round(seconds * 1000))
+    total_ms = round(seconds * 1000)
 
     # 依次拆分出 时、分、秒、毫秒（使用 divmod 整除取余）
     hours, remainder = divmod(total_ms, 3_600_000)  # 1 小时 = 3,600,000 毫秒

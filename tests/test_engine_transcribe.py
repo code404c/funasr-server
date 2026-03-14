@@ -140,9 +140,11 @@ class TestTranscribe:
         mock_model = MagicMock()
         mock_model.generate.return_value = []
 
-        with patch.object(engine.model_pool, "get_or_create", return_value=mock_model):
-            with pytest.raises(RuntimeError, match="no transcription results"):
-                engine.transcribe(audio_path, model="cn_meeting")
+        with (
+            patch.object(engine.model_pool, "get_or_create", return_value=mock_model),
+            pytest.raises(RuntimeError, match="no transcription results"),
+        ):
+            engine.transcribe(audio_path, model="cn_meeting")
 
     def test_transcribe_passes_gpu_params(self, tmp_path: Path, pool: TTLModelPool[Any]) -> None:
         """batch_size_s 和 merge_length_s 从 Settings 正确传递到 generate_kwargs。"""
@@ -186,10 +188,12 @@ class TestGetOrLoadModel:
         # 清空 pool 确保需要调用 loader
         engine.model_pool._entries.clear()
 
-        with patch.dict("sys.modules", {"funasr": None}):
-            with patch("builtins.__import__", side_effect=ImportError("No module named 'funasr'")):
-                with pytest.raises(FunASRUnavailableError, match="FunASR is not installed"):
-                    engine._get_or_load_model("cn_meeting")
+        with (
+            patch.dict("sys.modules", {"funasr": None}),
+            patch("builtins.__import__", side_effect=ImportError("No module named 'funasr'")),
+            pytest.raises(FunASRUnavailableError, match="FunASR is not installed"),
+        ):
+            engine._get_or_load_model("cn_meeting")
 
     def test_loads_model_with_all_components(self, engine: FunASREngine, tmp_path: Path) -> None:
         """验证 _get_or_load_model 加载时包含 punc_model 和 spk_model。"""

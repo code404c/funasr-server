@@ -96,3 +96,4 @@ def test_transcription_vtt(client: TestClient) -> None:
 def test_invalid_response_format(client: TestClient) -> None:
     resp = _upload(client, response_format="invalid")
     assert resp.status_code == 400
+    assert resp.json()["error"]["type"] == "invalid_request_error"

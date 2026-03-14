@@ -4,8 +4,9 @@
 主要职责包括：
 - 初始化日志系统（loguru）
 - 创建模型池和推理引擎
-- 注册路由和中间件（含可选的 API Key 鉴权）
-- 定义应用生命周期钩子
+- 注册路由和依赖注入级鉴权
+- 注册全局异常处理器
+- 定义应用生命周期钩子（含可选模型预加载）
 
 典型用法::
 
@@ -15,19 +16,22 @@
 
 from __future__ import annotations
 
-import hmac  # 用于安全的字符串比较，防止时序攻击
 import sys
 from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
 
 from funasr_server import __version__
 from funasr_server.config import Settings, get_settings
+from funasr_server.dependencies import ApiKeyDependency
 from funasr_server.engine import FunASREngine
+from funasr_server.errors import TranscriptionError
 from funasr_server.model_pool import TTLModelPool
+from funasr_server.routers.models import router as models_router
 from funasr_server.routers.transcriptions import router as transcriptions_router
 
 
@@ -39,12 +43,9 @@ def _configure_logging(settings: Settings) -> None:
     确保日志行为与当前 settings 一致。
 
     Args:
-        settings: 应用配置对象，使用其中的 ``log_level``（日志级别，如 INFO/DEBUG）
-                  和 ``log_json``（是否以 JSON 格式输出日志）两个字段。
+        settings: 应用配置对象，使用其中的 ``log_level`` 和 ``log_json`` 两个字段。
     """
-    # 移除 loguru 默认的 stderr handler，避免重复输出
     logger.remove()
-    # serialize=True 时 loguru 会把每条日志序列化为 JSON，便于日志采集系统解析
     logger.add(sys.stderr, level=settings.log_level, serialize=settings.log_json)
 
 
@@ -52,8 +53,8 @@ def _configure_logging(settings: Settings) -> None:
 async def _lifespan(app: FastAPI):
     """FastAPI 应用生命周期管理器。
 
-    利用 Python 异步上下文管理器，在 ``yield`` 之前执行启动逻辑，
-    ``yield`` 之后执行关闭逻辑。FastAPI 会在服务启动和关闭时自动调用。
+    启动时可选预加载指定模型（通过 ``FUNASR_PRELOAD_MODELS`` 配置），
+    避免首次请求的冷启动延迟。
 
     Args:
         app: FastAPI 应用实例（由框架自动传入）。
@@ -62,6 +63,18 @@ async def _lifespan(app: FastAPI):
         None: yield 之后应用开始接受请求，直到收到关闭信号。
     """
     logger.info("funasr-server starting up")
+
+    # 模型预加载
+    settings: Settings = app.state.settings
+    engine: FunASREngine = app.state.engine
+    for model_name in settings.preload_models:
+        logger.info("Preloading model: {}", model_name)
+        try:
+            engine._get_or_load_model(model_name)
+            logger.info("Model preloaded: {}", model_name)
+        except Exception:
+            logger.exception("Failed to preload model: {}", model_name)
+
     yield  # 应用在此处开始处理请求
     logger.info("funasr-server shutting down")
 
@@ -76,73 +89,57 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
 
     Args:
         settings: 可选的配置对象。如果不传，则通过 ``get_settings()`` 从环境变量读取。
-                  关键字参数（keyword-only），调用时必须写 ``create_app(settings=s)``。
 
     Returns:
         FastAPI: 配置完毕的应用实例，包含路由、中间件、引擎等全部组件。
     """
-    # 如果未传入 settings，则从环境变量 / .env 文件中加载默认配置
     settings = settings or get_settings()
     _configure_logging(settings)
 
-    # 创建模型池：TTLModelPool 负责缓存已加载的 ASR 模型，超过 TTL 自动卸载以释放 GPU 显存
+    # 创建模型池和推理引擎
     model_pool: TTLModelPool[Any] = TTLModelPool(settings.model_ttl_seconds)
-    # 创建推理引擎：封装了 FunASR 的模型加载和推理逻辑
     engine = FunASREngine(settings=settings, model_pool=model_pool)
 
-    # 创建 FastAPI 实例，lifespan 参数指定生命周期管理器
     app = FastAPI(title="funasr-server", version=__version__, lifespan=_lifespan)
-    # 将配置和引擎挂载到 app.state，路由处理函数中可通过 request.app.state 访问
     app.state.settings = settings
     app.state.engine = engine
 
-    # ── 可选的 API Key 鉴权中间件 ──
-    # 仅当环境变量 FUNASR_API_KEY 非空时才启用鉴权
-    if settings.api_key:
-        # 提前取出明文密钥，避免每次请求都调用 get_secret_value()
-        expected = settings.api_key.get_secret_value()
+    # ── 全局异常处理器：TranscriptionError → 结构化 JSON 响应 ──
 
-        @app.middleware("http")
-        async def verify_api_key(request: Request, call_next):
-            """HTTP 中间件：校验请求头中的 Bearer Token。
+    @app.exception_handler(TranscriptionError)
+    async def transcription_error_handler(request: Request, exc: TranscriptionError):
+        logger.warning("TranscriptionError: error_id={} message={}", exc.error_id, exc.message)
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "error": {
+                    "message": exc.message,
+                    "type": exc.error_type,
+                    "error_id": exc.error_id,
+                }
+            },
+        )
 
-            对每个请求（除 /health 外）检查 Authorization 头，
-            使用 hmac.compare_digest 做恒定时间比较，防止时序攻击。
+    # ── 可选 CORS 中间件 ──
 
-            Args:
-                request: 当前 HTTP 请求对象。
-                call_next: 调用链中的下一个处理器（中间件或路由）。
+    if settings.allow_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.allow_origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
 
-            Returns:
-                Response: 鉴权通过则返回下游响应，否则返回 401 JSON 响应。
-            """
-            # /health 端点不需要鉴权，用于负载均衡器的健康检查
-            if request.url.path == "/health":
-                return await call_next(request)
-            # 从 Authorization 头中提取 token，格式为 "Bearer <token>"
-            auth = request.headers.get("Authorization", "")
-            token = auth.removeprefix("Bearer ").strip()
-            # hmac.compare_digest 是恒定时间比较，即使 token 不匹配也不会提前返回，
-            # 防止攻击者通过测量响应时间逐字符猜测密钥（时序攻击）
-            if not hmac.compare_digest(token, expected):
-                client = request.client.host if request.client else "unknown"
-                logger.warning("API key auth failed: path={} client={}", request.url.path, client)
-                return JSONResponse(status_code=401, content={"detail": "Invalid API key"})
-            return await call_next(request)
+    # ── 注册路由（带 API Key 鉴权依赖） ──
 
-    # 注册转写路由（/v1/audio/transcriptions）
-    app.include_router(transcriptions_router)
+    app.include_router(transcriptions_router, dependencies=[ApiKeyDependency])
+    app.include_router(models_router, dependencies=[ApiKeyDependency])
 
+    # /health 端点不需要鉴权，直接注册
     @app.get("/health")
     def health() -> dict[str, str]:
-        """健康检查端点。
-
-        供 Docker 健康检查、Kubernetes liveness probe 或负载均衡器调用，
-        返回固定的 ``{"status": "ok"}`` 表示服务正常运行。
-
-        Returns:
-            dict: 包含 ``status`` 字段的字典。
-        """
+        """健康检查端点。"""
         return {"status": "ok"}
 
     return app

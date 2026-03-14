@@ -30,7 +30,7 @@ class TestTranscriptionErrorHandling:
     """转写端点的异常处理分支测试。"""
 
     def test_funasr_unavailable_returns_503(self, settings: Settings) -> None:
-        """FunASRUnavailableError 应返回 503。"""
+        """FunASRUnavailableError 应返回 503 结构化错误。"""
         app = create_app(settings=settings)
         with patch.object(
             app.state.engine,
@@ -41,10 +41,13 @@ class TestTranscriptionErrorHandling:
             resp = _upload(client)
 
         assert resp.status_code == 503
-        assert "FunASR is not installed" in resp.json()["detail"]
+        error = resp.json()["error"]
+        assert "FunASR is not installed" in error["message"]
+        assert error["type"] == "service_unavailable"
+        assert "error_id" in error
 
     def test_value_error_returns_400(self, settings: Settings) -> None:
-        """ValueError 应返回 400。"""
+        """ValueError 应返回 400 结构化错误。"""
         app = create_app(settings=settings)
         with patch.object(
             app.state.engine,
@@ -55,10 +58,12 @@ class TestTranscriptionErrorHandling:
             resp = _upload(client)
 
         assert resp.status_code == 400
-        assert "Invalid model" in resp.json()["detail"]
+        error = resp.json()["error"]
+        assert "Invalid model" in error["message"]
+        assert error["type"] == "invalid_request_error"
 
     def test_generic_exception_returns_500(self, settings: Settings) -> None:
-        """其他未知异常应返回 500。"""
+        """其他未知异常应返回 500 结构化错误。"""
         app = create_app(settings=settings)
         with patch.object(
             app.state.engine,
@@ -69,4 +74,6 @@ class TestTranscriptionErrorHandling:
             resp = _upload(client)
 
         assert resp.status_code == 500
-        assert resp.json()["detail"] == "Internal transcription error"
+        error = resp.json()["error"]
+        assert error["message"] == "Internal transcription error"
+        assert error["type"] == "internal_error"
